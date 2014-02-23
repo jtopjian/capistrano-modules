@@ -1,0 +1,26 @@
+require 'vagrant-openstack-plugin'
+
+Vagrant.configure("2") do |config|
+  # "dummy" box because we're using Glance
+  config.vm.box = "dummy"
+
+  # SSH
+  config.ssh.private_key_path = "<%= server[:private_key] %>"
+
+  # Basic OpenStack options
+  # Note that an openrc file needs sourced before using
+  config.vm.provider :openstack do |os|
+    os.username        = ENV['OS_USERNAME']
+    os.api_key         = ENV['OS_PASSWORD']
+    os.flavor          = /<%= server[:flavor] %>/
+    os.image           = '<%= server[:image_id] %>'
+    os.endpoint        = "#{ENV['OS_AUTH_URL']}/tokens"
+    os.keypair_name    = "<%= server[:keypair] %>"
+    os.ssh_username    = "<%= server[:user] %>"
+    os.security_groups = <%= server[:security_groups] %>
+  end
+
+  config.vm.define "<%= server[:name] %>" do |vm|
+  end
+
+end
