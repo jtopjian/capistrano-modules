@@ -29,7 +29,7 @@ module CapHiera
   def hiera_build_servers_from_stage stage
     if stage
       servers = hiera('servers', {:stage => stage})
-      if servers
+      if servers != 'nil'
         servers.each do |k,v|
           server k, v
         end
