@@ -42,7 +42,7 @@ In order to use Masterless Puppet, first create a directory under your Hiera con
 $ mkdir files/hiera/production
 ```
 
-Inside this directory, create data sources for each role that you will be deploying as well as any global settings in a `default.yaml` file:
+Inside this directory, create data sources for each server that you will be deploying as well as any global settings in a `default.yaml` file:
 
 * files/hiera/production/default.yaml:
 
@@ -53,7 +53,7 @@ packages:
   - 'htop'
 ```
 
-* files/hiera/production/web.yaml
+* files/hiera/production/www.example.com.yaml
 
 ```yaml
 apache::mpm_module: 'itk'
@@ -66,9 +66,11 @@ Next, add server entries to Hiera:
 ```yaml
 servers:
   'www.example.com'
-    'roles:
-      - 'web'
+    'roles':
+      - 'apache'
 ```
+
+__Note__: At this time, "roles" is only used to categorize servers. You can use Capistrano's "role-filter" to run commands against servers that share a common role. Roles may play a larger role (no pun intended) in the future, so don't write them off quickly.
 
 Finally, create a template that will turn into `hiera.yaml` on the destination server. Most of the time, this template will work:
 
@@ -79,7 +81,7 @@ Finally, create a template that will turn into `hiera.yaml` on the destination s
   - yaml
 
 :hierarchy:
-<% roles.each do |role| %>  - "<%= role %>"<% end %>
+  - "<%= host %>"
   - "default"
 
 :yaml:
@@ -88,25 +90,29 @@ Finally, create a template that will turn into `hiera.yaml` on the destination s
 :merge_behavior: deeper
 ```
 
+This template will configure Hiera to look at two locations for data:
+
+  * /etc/puppet/hiera/default.yaml
+  * /etc/puppet/hiera/www.example.com.yaml
+
 #### Puppet
 
-Once Hiera has been configured, add some files to `files/puppet/production`:
+Once Hiera has been configured, add two files to `files/puppet/production`:
 
 * files/puppet/production/Puppetfile: This is a standard [Puppetfile](http://librarian-puppet.com/) that will be deployed to each server in the stage.
 
 __Note__: `r10k` is used instead of `librarian-puppet`.
 
-* files/puppet/production/base.pp: This manifest will be deployed to all servers in the stage. Settings for this manifest should go in `default.yaml`.
-
-__Note__: `default` is a keyword in Puppet, hence the name `base.pp` while the corresponding Hiera file is `default.yaml`.
-
-* files/puppet/production/web.pp: This manifest will be deployed to all servers with a role of `web`. If you use the standard "Profiles and Roles" Puppet pattern, then this manifest should be very small, such as:
+* files/puppet/production/www.example.com.pp: This manifest will be deployed to `www.example.com`. This manifest will contain the configuration for the entire server. If you use the common "Roles & Profiles" Puppet pattern, then this manifest will be a composition of all roles that are applied to the server.
 
 ```puppet
 include apache
+apache::vhost { 'example.com':
+  ...
+}
 ```
 
-Settings for this manifest should go in `web.yaml`.
+Settings for this manifest should go in `www.example.com.yaml`.
 
 __Note__: Settings could also go in `default.yaml` but be aware that `default.yaml` is deployed to *all* servers in the stage. This could be an issue if the file contains sensitive information.
 
@@ -119,10 +125,10 @@ With these files in place, you will be able to perform the `puppet:deploy` task.
 Once the files have been deployed to the remote server, you can apply them:
 
 ```bash
-$ cap production puppet:noop
-$ cap production puppet:noop[verbose]
+$ cap production puppet:apply[noop]
+$ cap production puppet:apply[noop verbose]
 $ cap production puppet:apply
-$ cap production puppet:apply[verbose debug]
+$ cap production puppet:apply[verbose]
 ```
 
 ## Credits

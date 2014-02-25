@@ -95,17 +95,6 @@ namespace :puppet do
     end
   end
 
-  desc 'Runs puppet apply with --noop'
-  task :noop, [:opts] do |t, args|
-    opts = "--noop "
-    if args.opts
-      args.opts.split(/\s+/).each do |opt|
-        opts += "--#{opt} "
-      end
-    end
-    puppet_apply opts
-  end
-
   desc 'Runs puppet apply on the server'
   task :apply, [:opts] do |t, args|
     opts = ""
@@ -114,7 +103,10 @@ namespace :puppet do
         opts += "--#{opt} "
       end
     end
-    puppet_apply opts
+    on roles(:all) do |host|
+      info "Running puppet apply #{opts} on #{host}"
+      puts capture("cd /etc/puppet && sudo puppet apply #{opts} manifests/#{host}.pp")
+    end
   end
 
   private
@@ -126,11 +118,8 @@ namespace :puppet do
     puppet_dir = "#{fetch(:puppet_data)}/#{stage}"
     hiera_dir  = "#{fetch(:hiera_data)}/#{stage}"
 
-    # Get the roles of the server
-    roles = host.roles.to_a
-
     # Render the hiera.yaml file and add it to the file list
-    hiera_file = render_hiera roles
+    hiera_file = render_hiera host
     if hiera_file
       files.merge!(add_to_file_list(hiera_file, '/etc/puppet/hiera.yaml'))
     end
@@ -138,17 +127,11 @@ namespace :puppet do
     # default.yaml
     files.merge!(add_to_file_list("#{hiera_dir}/default.yaml", '/etc/puppet/hiera/default.yaml'))
 
-    # base.pp
-    files.merge!(add_to_file_list("#{puppet_dir}/base.pp", '/etc/puppet/manifests/base.pp'))
+    # host.pp
+    files.merge!(add_to_file_list("#{puppet_dir}/#{host}.pp", "/etc/puppet/manifests/#{host}.pp"))
 
-    # For each role that the server belongs to,
-    roles.each do |role|
-      # role.pp
-      files.merge!(add_to_file_list("#{puppet_dir}/#{role}.pp", "/etc/puppet/manifests/#{role}.pp"))
-
-      # role.yaml
-      files.merge!(add_to_file_list("#{hiera_dir}/#{role}.yaml", "/etc/puppet/hiera/#{role}.yaml"))
-    end
+    # host.yaml
+    files.merge!(add_to_file_list("#{hiera_dir}/#{host}.yaml", "/etc/puppet/hiera/#{host}.yaml"))
 
     # Puppetfile
     files.merge!(add_to_file_list("#{puppet_dir}/Puppetfile", '/etc/puppet/Puppetfile'))
@@ -164,7 +147,7 @@ namespace :puppet do
     files
   end
 
-  def render_hiera roles
+  def render_hiera host
     stage = fetch(:stage)
 
     # Determine the hiera file to use
@@ -195,14 +178,8 @@ namespace :puppet do
 
   def puppet_apply opts
     on roles(:all) do |host|
-      if test("[ -f /etc/puppet/manifests/base.pp ]")
-        info "Running puppet apply #{opts} on #{host} for base.pp"
-        puts capture("cd /etc/puppet && sudo puppet apply #{opts} manifests/base.pp")
-      end
-      host.roles.to_a.each do |role|
-        info "Running puppet apply #{opts} on #{host} for #{role}"
-        puts capture("cd /etc/puppet && sudo puppet apply #{opts} manifests/#{role}.pp")
-      end
+      info "Running puppet apply #{opts} on #{host}"
+      puts capture("cd /etc/puppet && sudo puppet apply #{opts} manifests/#{host}.pp")
     end
   end
 
